@@ -13,6 +13,7 @@ Hướng dẫn:
 """
 
 from email.mime import text
+from http import client
 import os
 import time
 from typing import Any, Callable
@@ -298,7 +299,29 @@ def streaming_chatbot() -> None:
         - Cắt history còn 4 lượt cuối (8 message): history = history[-8:]
     """
     # TODO: vòng lặp while, đọc input, stream phản hồi, duy trì history
-    raise NotImplementedError("Implement streaming_chatbot")
+    from openai import OpenAI
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    history = []
+    while True:
+        user_msg = input("User: ")
+        if user_msg.strip().lower() in ("quit", "exit", "bye"):
+            break
+        messages = history + [{"role": "user", "content": user_msg}]
+        stream = client.chat.completions.create(
+            model=OPENAI_MODEL, messages=messages, stream=True,
+        )
+        print("Assistant: ", end="", flush=True)
+        reply_list = ""
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content or ""
+            print(delta, end="", flush=True)
+            reply_list += delta
+        print()  # xuống dòng sau khi in xong phản hồi
+
+        reply = "".join(reply_list)
+        history.append({"role": "user", "content": user_msg})
+        history.append({"role": "assistant", "content": reply})
+        history = history[-8:]  # giữ 4 lượt cuối (8 message)
 
 
 # ---------------------------------------------------------------------------
@@ -325,7 +348,13 @@ def retry_with_backoff(
         Exception cuối cùng của fn() sau khi hết số lần thử.
     """
     # TODO: vòng lặp retry với exponential backoff
-    raise NotImplementedError("Implement retry_with_backoff")
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except Exception:
+            if attempt == max_retries:
+                raise                          # hết lượt → ném lỗi cuối cùng ra
+            time.sleep(base_delay * (2 ** attempt))
 
 
 # ===========================================================================
