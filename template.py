@@ -413,6 +413,38 @@ def run_assistant(
                 "total_cost": total_cost, "history": history}
     """
     # TODO: triển khai theo khung sườn trong docstring
+    if get_input is None:
+        get_input = input
+    from openai import OpenAI   
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    history, turns, tokens_used, total_cost = [], 0, 0, 0.0
+
+    while True:
+        if max_turns is not None and turns >= max_turns:
+            break
+        user_msg = get_input()
+        if user_msg.strip().lower() in ("quit", "exit", "bye"):
+            break
+        messages = [{"role": "system", "content": persona}] + history + [{"role": "user", "content": user_msg}]
+        stream = retry_with_backoff(lambda: client.chat.completions.create(
+            model=OPENAI_MODEL, messages=messages, stream=True))
+        print("Assistant: ", end="", flush=True)
+        reply_list = ""
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content or ""
+            print(delta, end="", flush=True)
+            reply_list += delta
+        print()  # xuống dòng sau khi in xong phản hồi
+        reply = "".join(reply_list)
+        history.append({"role": "user", "content": user_msg})
+        history.append({"role": "assistant", "content": reply})
+        history = history[-8:]  # giữ 4 lượt cuối (8 message)
+        turns += 1
+        tokens_used += count_tokens(user_msg, OPENAI_MODEL) + count_tokens(reply, OPENAI_MODEL)
+        cost_info = estimate_cost(user_msg, reply, OPENAI_MODEL)
+        total_cost += cost_info["total_cost"]
+    return {"turns": turns, "tokens_used": tokens_used, "total_cost": total_cost, "history": history}
+    
     raise NotImplementedError("Implement run_assistant")
 
 
