@@ -47,10 +47,10 @@ OPENAI_MINI_MODEL = os.getenv("LAB_MINI_MODEL", "gpt-4o-mini")
 # ---------------------------------------------------------------------------
 def call_openai(
     prompt: str,
-    model: str = OPENAI_MODEL,
-    temperature: float = 0.7,
-    top_p: float = 0.9,
-    max_tokens: int = 256,
+    model: str = OPENAI_MODEL,  # default: gpt-4o (mạnh, chậm, đắt)
+    temperature: float = 0.7,   # 0.0 = ổn định, càng cao càng "sáng tạo"
+    top_p: float = 0.9,         # nucleus sampling — thường chỉ chỉnh 1 trong 2
+    max_tokens: int = 256,      # chặn trần độ dài output (và chi phí!)
 ) -> tuple[str, float]:
     """
     Gọi OpenAI Chat Completions API, trả về nội dung phản hồi + độ trễ.
@@ -72,8 +72,20 @@ def call_openai(
     """
     # TODO: import OpenAI, tạo client, gọi chat.completions.create,
     #       đo start/end time, trả về (response_text, latency)
-    raise NotImplementedError("Implement call_openai")
-
+    from openai import OpenAI  
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    start_time = time.time()
+    response = client.chat.completions.create(
+    model=model,
+    messages=[{"role": "user", "content": prompt}],
+    temperature=temperature,  
+    top_p=top_p,         
+    max_tokens=max_tokens,    
+    )
+    end_time = time.time()
+    latency = end_time - start_time
+    response_text = response.choices[0].message.content
+    return response_text, latency
 
 # ---------------------------------------------------------------------------
 # Task 1.2 — Gọi GPT-4o-mini
@@ -94,8 +106,7 @@ def call_openai_mini(
         Tái sử dụng call_openai() với model=OPENAI_MINI_MODEL — 1 dòng code.
     """
     # TODO: gọi call_openai với model=OPENAI_MINI_MODEL
-    raise NotImplementedError("Implement call_openai_mini")
-
+    return call_openai(prompt, model=OPENAI_MINI_MODEL, temperature=temperature, top_p=top_p, max_tokens=max_tokens)
 
 # ---------------------------------------------------------------------------
 # Task 1.3 — So sánh GPT-4o vs GPT-4o-mini
@@ -122,8 +133,20 @@ def compare_models(prompt: str) -> dict:
          model không có trong bảng thì lấy giá gpt-4o làm tham chiếu)
     """
     # TODO: gọi call_openai và call_openai_mini, ghép dict kết quả
-    raise NotImplementedError("Implement compare_models")
+    gpt4o_text, gpt4o_time = call_openai(prompt)
+    gpt4omini_text, gpt4omini_time = call_openai_mini(prompt)
 
+    pricing = PRICING_PER_1K_TOKENS.get(
+        OPENAI_MODEL, PRICING_PER_1K_TOKENS["gpt-4o"]
+    )
+    cost = (len(gpt4o_text.split()) / 0.75) / 1000 * pricing["output"]
+    return {
+        "gpt4o_answer": gpt4o_text,
+        "mini_answer": gpt4omini_text,
+        "gpt4o_time": gpt4o_time,
+        "mini_time": gpt4omini_time,
+        "gpt4o_cost": cost
+    }
 
 # ===========================================================================
 # PART 2 — SYSTEM PROMPT & TOKEN (Block 2: 15h40–16h20)
@@ -158,7 +181,19 @@ def chat_with_system_prompt(
         ]
     """
     # TODO: giống call_openai nhưng messages có thêm phần tử role="system"
-    raise NotImplementedError("Implement chat_with_system_prompt")
+    from openai import OpenAI  
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    response = client.chat.completions.create(
+    model=model,
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ],
+    temperature=temperature,         
+    max_tokens=max_tokens,    
+    )
+    response_text = response.choices[0].message.content
+    return response_text
 
 
 # ---------------------------------------------------------------------------
