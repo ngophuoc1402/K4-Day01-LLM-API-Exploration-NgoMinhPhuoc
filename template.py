@@ -12,11 +12,13 @@ Hướng dẫn:
        Chấm điểm tổng:    python grade.py
 """
 
+from email.mime import text
 import os
 import time
 from typing import Any, Callable
 
 from dotenv import load_dotenv
+import tiktoken
 
 # Nạp OPENAI_API_KEY từ file .env (copy .env.example thành .env và dán key vào)
 load_dotenv()
@@ -183,6 +185,7 @@ def chat_with_system_prompt(
     # TODO: giống call_openai nhưng messages có thêm phần tử role="system"
     from openai import OpenAI  
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    start = time.time()
     response = client.chat.completions.create(
     model=model,
     messages = [
@@ -192,9 +195,10 @@ def chat_with_system_prompt(
     temperature=temperature,         
     max_tokens=max_tokens,    
     )
+    end = time.time()
+    latency = end - start
     response_text = response.choices[0].message.content
-    return response_text
-
+    return response_text, latency
 
 # ---------------------------------------------------------------------------
 # Task 2.2 — Đếm token bằng tiktoken
@@ -220,7 +224,12 @@ def count_tokens(text: str, model: str = OPENAI_MODEL) -> int:
         max(1, len(text) // 4)   (trung bình 1 token ≈ 4 ký tự)
     """
     # TODO: dùng tiktoken để đếm token, có fallback khi lỗi
-    raise NotImplementedError("Implement count_tokens")
+    try:
+        import tiktoken
+        enc = tiktoken.encoding_for_model(model)
+        return len(enc.encode(text))
+    except Exception:
+        return max(1, len(text) // 4)   # ước lượng: 1 token ≈ 4 ký tự
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +256,20 @@ def estimate_cost(prompt: str, response: str, model: str = OPENAI_MODEL) -> dict
          miễn phí — thì lấy giá gpt-4o làm tham chiếu học tập)
     """
     # TODO: đếm token prompt/response, tra bảng giá, trả về dict 5 key
-    raise NotImplementedError("Implement estimate_cost")
+    prompt_tokens = count_tokens(prompt, model)
+    completion_tokens = count_tokens(response, model)
+    pricing = PRICING_PER_1K_TOKENS[model]
+    prompt_cost = prompt_tokens / 1000 * pricing["input"]
+    completion_cost = completion_tokens / 1000 * pricing["output"]
+    total_cost = prompt_cost + completion_cost
+
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "prompt_cost": prompt_cost,
+        "completion_cost": completion_cost,
+        "total_cost": total_cost
+    }
 
 
 # ===========================================================================
